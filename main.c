@@ -1,112 +1,86 @@
 #include <stdio.h>
 #include <windows.h>
 
-void ReadAllValues(HKEY hKey) {
-    DWORD i, retCode;
-    DWORD valueCount, maxValueNameLen, maxValueLen;
+void CheckStartupKeys(HKEY rootKey, LPCSTR subKey) {
+    HKEY hKey;
+    LONG result;
+    DWORD i, valueCount, maxValueNameLen, maxValueLen;
     char *valueName, *dataBuffer;
     DWORD valueNameSize, dataSize, valueType;
 
-    // Get information about the key
-    retCode = RegQueryInfoKey(hKey, NULL, NULL, NULL, NULL, NULL, NULL, &valueCount, &maxValueNameLen, &maxValueLen, NULL, NULL);
-    if (retCode != ERROR_SUCCESS) {
-        printf("Error querying key info: %ld\n", retCode);
+    result = RegOpenKeyEx(rootKey, subKey, 0, KEY_READ, &hKey);
+    if (result != ERROR_SUCCESS) {
+        printf("Error opening key %s: %ld\n", subKey, result);
+        return;
+    }
+
+    result = RegQueryInfoKey(hKey, NULL, NULL, NULL, NULL, NULL, NULL, &valueCount, &maxValueNameLen, &maxValueLen, NULL, NULL);
+    if (result != ERROR_SUCCESS) {
+        printf("Error querying key info for %s: %ld\n", subKey, result);
+        RegCloseKey(hKey);
         return;
     }
 
     valueName = (char*)malloc(maxValueNameLen + 1);
     dataBuffer = (char*)malloc(maxValueLen);
 
-    // Enumerate and print all values
     for (i = 0; i < valueCount; i++) {
         valueNameSize = maxValueNameLen + 1;
         dataSize = maxValueLen;
-        retCode = RegEnumValue(hKey, i, valueName, &valueNameSize, NULL, &valueType, (LPBYTE)dataBuffer, &dataSize);
+        result = RegEnumValue(hKey, i, valueName, &valueNameSize, NULL, &valueType, (LPBYTE)dataBuffer, &dataSize);
 
-        if (retCode == ERROR_SUCCESS) {
-            printf("Value Name: %s\n", valueName);
-            switch (valueType) {
-                case REG_SZ:
-                    printf("Value Type: String\n");
-                    printf("Value Data: %s\n", (char*)dataBuffer);
-                    break;
-                case REG_DWORD:
-                    printf("Value Type: DWORD\n");
-                    printf("Value Data: %lu\n", *(DWORD*)dataBuffer);
-                    break;
-                default:
-                    printf("Value Type: Other\n");
-                    break;
+        if (result == ERROR_SUCCESS) {
+            printf("Startup Key: %s\n", valueName);
+            if (valueType == REG_SZ) {
+                printf("Value Type: String\n");
+                printf("Value Data: %s\n", (char*)dataBuffer);
+            } else if (valueType == REG_DWORD) {
+                printf("Value Type: DWORD\n");
+                printf("Value Data: %lu\n", *(DWORD*)dataBuffer);
+            } else {
+                printf("Value Type: Other\n");
             }
             printf("\n");
         } else {
-            printf("Error enumerating value: %ld\n", retCode);
+            printf("Error enumerating value for %s: %ld\n", subKey, result);
         }
     }
 
     free(valueName);
     free(dataBuffer);
-}
-
-void EnumerateRegistryKeys(HKEY hKey) {
-    DWORD i, retCode;
-    DWORD subKeyCount, maxSubKeyLen;
-    char *subKeyName;
-    DWORD subKeyNameSize;
-    HKEY hSubKey;
-
-    // Get information about the key
-    retCode = RegQueryInfoKey(hKey, NULL, NULL, NULL, &subKeyCount, &maxSubKeyLen, NULL, NULL, NULL, NULL, NULL, NULL);
-    if (retCode != ERROR_SUCCESS) {
-        printf("Error querying key info: %ld\n", retCode);
-        return;
-    }
-
-    subKeyName = (char*)malloc(maxSubKeyLen + 1);
-
-    // Enumerate and print all subkeys
-    for (i = 0; i < subKeyCount; i++) {
-        subKeyNameSize = maxSubKeyLen + 1;
-        retCode = RegEnumKeyEx(hKey, i, subKeyName, &subKeyNameSize, NULL, NULL, NULL, NULL);
-
-        if (retCode == ERROR_SUCCESS) {
-            printf("SubKey Name: %s\n", subKeyName);
-
-            // Open the subkey and read its values
-            retCode = RegOpenKeyEx(hKey, subKeyName, 0, KEY_READ, &hSubKey);
-            if (retCode == ERROR_SUCCESS) {
-                ReadAllValues(hSubKey);
-                RegCloseKey(hSubKey);
-            } else {
-                printf("Error opening subkey: %ld\n", retCode);
-            }
-
-            printf("\n");
-        } else {
-            printf("Error enumerating subkey: %ld\n", retCode);
-        }
-    }
-
-    free(subKeyName);
+    RegCloseKey(hKey);
 }
 
 int main() {
-    HKEY hKey;
-    LONG result;
+    printf("Checking HKLM Run keys...\n");
+    CheckStartupKeys(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run");
 
-    // Open the registry key
-    result = RegOpenKeyEx(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion", 0, KEY_READ, &hKey);
-    if (result != ERROR_SUCCESS) {
-        printf("Error opening key: %ld\n", result);
-        return 1;
-    }
+    printf("Checking HKCU Run keys...\n");
+    CheckStartupKeys(HKEY_CURRENT_USER, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run");
 
-    // Enumerate and read all subkeys and values
-    EnumerateRegistryKeys(hKey);
-    ReadAllValues(hKey);
+    printf("Checking HKLM RunOnce keys...\n");
+    CheckStartupKeys(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce");
 
-    // Close the registry key
-    RegCloseKey(hKey);
+    printf("Checking HKCU RunOnce keys...\n");
+    CheckStartupKeys(HKEY_CURRENT_USER, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce");
+
+    printf("Checking HKLM Policies Explorer Run keys...\n");
+    CheckStartupKeys(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run");
+
+    printf("Checking HKCU Policies Explorer Run keys...\n");
+    CheckStartupKeys(HKEY_CURRENT_USER, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run");
+
+    printf("Checking HKLM Wow6432Node Run keys...\n");
+    CheckStartupKeys(HKEY_LOCAL_MACHINE, "SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\Run");
+
+    printf("Checking HKLM Wow6432Node RunOnce keys...\n");
+    CheckStartupKeys(HKEY_LOCAL_MACHINE, "SOFTWARE\\Wow6432Node\\Microsoft\\Windows\\CurrentVersion\\RunOnce");
+
+    printf("Checking HKLM Shell Folders keys...\n");
+    CheckStartupKeys(HKEY_LOCAL_MACHINE, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders");
+
+    printf("Checking HKCU Shell Folders keys...\n");
+    CheckStartupKeys(HKEY_CURRENT_USER, "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Shell Folders");
 
     return 0;
 }
