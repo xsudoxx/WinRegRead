@@ -46,7 +46,7 @@ Execute files automatically when external drives are connected.
 #### Key to Check:
 
 HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers
-Indicators of Anomalous Registry Keys
+## Indicators of Anomalous Registry Keys
 Unexpected Entries: New or unknown entries in common keys.
 Suspicious Values: Values pointing to non-standard directories or executables with unusual names.
 Unusual Data: Entries with obfuscated or encoded data.
